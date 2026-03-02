@@ -574,16 +574,16 @@ input[type=date].inline-input { max-width: 160px; }
 .prop-card:hover .del-prop { opacity: 1; }
 
 .prop-drop {
-  min-height: 140px;
+  min-height: 100px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   color: var(--blue);
   font-size: 13px;
   font-weight: 500;
-  padding: 24px;
+  padding: 16px 24px;
   text-align: center;
   transition: background .15s;
 }
@@ -616,19 +616,25 @@ input[type=date].inline-input { max-width: 160px; }
 
 .paste-zone {
   border-top: .5px solid var(--sep);
-  padding: 9px 14px;
-  font-size: 12px;
-  color: var(--muted);
-  font-style: italic;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--blue);
+  font-style: normal;
   outline: none;
   cursor: text;
-  min-height: 36px;
-  background: rgba(0,122,255,.02);
-  transition: background .15s;
+  min-height: 40px;
+  background: rgba(0,122,255,.05);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
 }
+.paste-zone::before { content: '📋'; font-size: 14px; }
 .paste-zone:focus {
-  background: rgba(0,122,255,.06);
+  background: rgba(0,122,255,.12);
   color: var(--blue);
+  box-shadow: inset 0 0 0 2px rgba(0,122,255,.3);
 }
 
 /* ── PDF MODAL ── */
@@ -995,7 +1001,7 @@ input[type=date].inline-input { max-width: 160px; }
           <span style="font-size:11px;color:var(--muted);font-weight:400">Jusqu'à 2 images — PH + SEP</span>
         </div>
         <div class="paste-zone" id="paste_ph" contenteditable="true"
-          onclick="event.stopPropagation()">Coller ici (Ctrl+V)</div>
+          onclick="event.stopPropagation()">Cliquer ici puis Ctrl+V pour coller</div>
         <div id="preview_ph" style="display:none">
           <div id="ph_imgs_wrap"></div>
           <div class="prop-add-more" onclick="document.getElementById('img_ph2').click()" id="ph_add_more" style="display:none">
@@ -1021,7 +1027,7 @@ input[type=date].inline-input { max-width: 160px; }
           <span style="font-size:11px;color:var(--muted);font-weight:400">Proposition PP + SEP</span>
         </div>
         <div class="paste-zone" id="paste_pp" contenteditable="true"
-          onclick="event.stopPropagation()">Coller ici (Ctrl+V)</div>
+          onclick="event.stopPropagation()">Cliquer ici puis Ctrl+V pour coller</div>
         <div class="prop-preview" id="preview_pp">
           <img id="img_preview_pp" src="" alt="PP SEP">
         </div>
@@ -1534,7 +1540,7 @@ async function handlePasteZone(event, key) {
   }
 
   const zone = document.getElementById('paste_' + key);
-  if (zone) zone.textContent = 'Coller ici (Ctrl+V)';
+  if (zone) zone.textContent = 'Cliquer ici puis Ctrl+V pour coller';
 }
 
 // Attach paste listeners after DOM is ready
