@@ -537,7 +537,7 @@ input[type=date].inline-input { max-width: 160px; }
   background: var(--card);
   border-radius: var(--r);
   box-shadow: var(--shadow);
-  overflow: visible;
+  overflow: hidden;
   cursor: pointer;
   transition: transform .12s, box-shadow .12s;
 }
@@ -616,25 +616,31 @@ input[type=date].inline-input { max-width: 160px; }
 
 .paste-zone {
   display: block;
-  border-top: .5px solid var(--sep);
-  padding: 11px 16px;
+  width: 100%;
+  border: none;
+  border-top: 2px solid rgba(0,122,255,.3);
+  padding: 12px 16px;
   font-size: 13px;
   font-weight: 600;
+  font-family: -apple-system, 'Inter', sans-serif;
   color: #007aff;
   outline: none;
   cursor: text;
-  background: rgba(0,122,255,.1);
-  user-select: none;
-  letter-spacing: .1px;
+  background: rgba(0,122,255,.08);
+  resize: none;
+  height: 44px;
+  overflow: hidden;
+  box-sizing: border-box;
 }
-.paste-zone::before { content: '📋 '; }
+.paste-zone::placeholder { color: #007aff; opacity: 1; }
 .paste-zone:focus {
-  background: rgba(0,122,255,.18);
-  box-shadow: inset 0 0 0 2px rgba(0,122,255,.5);
+  background: rgba(0,122,255,.15);
+  border-top-color: rgba(0,122,255,.7);
 }
 @media(prefers-color-scheme:dark){
-  .paste-zone { background: rgba(0,122,255,.18); color: #4da6ff; }
-  .paste-zone:focus { background: rgba(0,122,255,.28); }
+  .paste-zone { background: rgba(0,122,255,.2); color: #4da6ff; border-top-color: rgba(0,122,255,.4); }
+  .paste-zone::placeholder { color: #4da6ff; }
+  .paste-zone:focus { background: rgba(0,122,255,.3); }
 }
 
 /* ── PDF MODAL ── */
@@ -1000,8 +1006,7 @@ input[type=date].inline-input { max-width: 160px; }
           <span>Appuyer ou glisser une image</span>
           <span style="font-size:11px;color:var(--muted);font-weight:400">Jusqu'à 2 images — PH + SEP</span>
         </div>
-        <div class="paste-zone" id="paste_ph" contenteditable="true"
-          onclick="event.stopPropagation()">Cliquer ici puis Ctrl+V pour coller</div>
+        <textarea class="paste-zone" id="paste_ph" placeholder="📋 Cliquer ici puis Ctrl+V pour coller une image" readonly></textarea>
         <div id="preview_ph" style="display:none">
           <div id="ph_imgs_wrap"></div>
           <div class="prop-add-more" onclick="document.getElementById('img_ph2').click()" id="ph_add_more" style="display:none">
@@ -1026,8 +1031,7 @@ input[type=date].inline-input { max-width: 160px; }
           <span>Appuyer ou glisser une image</span>
           <span style="font-size:11px;color:var(--muted);font-weight:400">Proposition PP + SEP</span>
         </div>
-        <div class="paste-zone" id="paste_pp" contenteditable="true"
-          onclick="event.stopPropagation()">Cliquer ici puis Ctrl+V pour coller</div>
+        <textarea class="paste-zone" id="paste_pp" placeholder="📋 Cliquer ici puis Ctrl+V pour coller une image" readonly></textarea>
         <div class="prop-preview" id="preview_pp">
           <img id="img_preview_pp" src="" alt="PP SEP">
         </div>
@@ -1538,14 +1542,22 @@ async function handlePasteZone(event, key) {
     propImgs.pp[0] = src;
     renderPropPreviews('pp');
   }
-
-  const zone = document.getElementById('paste_' + key);
-  if (zone) zone.textContent = 'Cliquer ici puis Ctrl+V pour coller';
 }
 
-// Attach paste listeners after DOM is ready
+// Attach paste listeners — textarea fires paste events natively
 document.getElementById('paste_ph').addEventListener('paste', e => handlePasteZone(e, 'ph'));
 document.getElementById('paste_pp').addEventListener('paste', e => handlePasteZone(e, 'pp'));
+
+// Make textarea focusable (remove readonly on click so paste works)
+['paste_ph','paste_pp'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('click', e => {
+    e.stopPropagation();
+    el.removeAttribute('readonly');
+    el.focus();
+  });
+  el.addEventListener('blur', () => el.setAttribute('readonly',''));
+});
 
 // ── HONO ASSURANCE RAC → Auto Délégation ──
 document.getElementById('treso_hono').addEventListener('input', function() {
