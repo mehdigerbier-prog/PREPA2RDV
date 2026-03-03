@@ -1430,80 +1430,182 @@ function buildBody() {
 function openModal() { buildBody(); document.getElementById('pdf-modal').classList.add('open'); }
 function closeModal() { document.getElementById('pdf-modal').classList.remove('open'); }
 
-async function exportPDF() { openModal(); await doExport(); }
+async function exportPDF() { await doExport(); }
 
 async function doExport() {
-  buildBody();
   const exportBtn = document.querySelector('.pdf-modal-actions .nav-btn-blue');
-  if (exportBtn) { exportBtn.textContent = '⏳'; exportBtn.disabled = true; }
+  const navBtn = document.querySelector('.nav-btn-blue');
+  [exportBtn, navBtn].forEach(b => { if(b){ b.textContent='⏳'; b.disabled=true; }});
 
   try {
     const { jsPDF } = window.jspdf;
-    const content = document.getElementById('pdf-content');
-    const actions = content.querySelector('.pdf-modal-actions');
-    const handle = content.querySelector('.pdf-handle');
-    if (actions) actions.style.display = 'none';
-    if (handle) handle.style.display = 'none';
-
-    // Force white bg, full height visible
-    const origOverflow = content.style.overflow;
-    const origMaxH = content.style.maxHeight;
-    content.style.overflow = 'visible';
-    content.style.maxHeight = 'none';
-
-    // Wait for images to fully render
-    await new Promise(r => setTimeout(r, 200));
+    const { ratio, regime } = getCalc(activeFin);
+    const isLS2 = regime === 'LS2';
+    const docsOk = docs.filter(d => d.checked).length;
 
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pageW = 210, pageH = 297, margin = 10;
-    const usableW = pageW - margin * 2;
-    const usableH = pageH - margin * 2;
+    const PW = 210, PH = 297, M = 14, CW = PW - M*2;
+    let y = M;
+    const lineH = 7, secGap = 5, rowH = 8;
 
-    // Render full content at high resolution
-    const fullCanvas = await html2canvas(content, {
-      scale: 2,
-      backgroundColor: '#ffffff',
-      useCORS: true,
-      allowTaint: true,
-      logging: false,
-      imageTimeout: 15000,
-      windowWidth: content.scrollWidth,
-      windowHeight: content.scrollHeight
-    });
+    // ── helpers ──
+    function checkPage(need) {
+      if (y + need > PH - M) { pdf.addPage(); y = M; }
+    }
 
-    content.style.overflow = origOverflow;
-    content.style.maxHeight = origMaxH;
-    if (actions) actions.style.display = '';
-    if (handle) handle.style.display = '';
+    function title(txt) {
+      checkPage(14);
+      pdf.setFont('helvetica','bold');
+      pdf.setFontSize(22);
+      pdf.setTextColor(28,28,30);
+      pdf.text(txt, M, y); y += 9;
+    }
 
-    // Calculate dimensions
-    const canvasW = fullCanvas.width;
-    const canvasH = fullCanvas.height;
-    // mm per pixel
-    const mmPerPx = usableW / canvasW;
-    const totalHeightMm = canvasH * mmPerPx;
-    const pxPerPage = usableH / mmPerPx;
-    const totalPages = Math.ceil(canvasH / pxPerPage);
+    function subtitle(txt) {
+      checkPage(8);
+      pdf.setFont('helvetica','normal');
+      pdf.setFontSize(10);
+      pdf.setTextColor(142,142,147);
+      pdf.text(txt, M, y); y += 6;
+    }
 
-    for (let page = 0; page < totalPages; page++) {
-      if (page > 0) pdf.addPage();
+    function sectionTitle(txt) {
+      checkPage(12);
+      y += secGap;
+      pdf.setFont('helvetica','bold');
+      pdf.setFontSize(9);
+      pdf.setTextColor(142,142,147);
+      pdf.text(txt.toUpperCase(), M, y); y += 3;
+      pdf.setDrawColor(230,230,235);
+      pdf.setLineWidth(0.3);
+      pdf.line(M, y, PW-M, y); y += 5;
+    }
 
-      const startY = Math.floor(page * pxPerPage);
-      const endY = Math.min(startY + pxPerPage, canvasH);
-      const sliceH = endY - startY;
+    function row(label, val) {
+      if (!val) return;
+      checkPage(rowH);
+      pdf.setFont('helvetica','normal');
+      pdf.setFontSize(11);
+      pdf.setTextColor(100,100,110);
+      pdf.text(label, M, y);
+      pdf.setFont('helvetica','bold');
+      pdf.setTextColor(28,28,30);
+      pdf.text(val, PW-M, y, {align:'right'});
+      pdf.setDrawColor(245,245,248);
+      pdf.setLineWidth(0.2);
+      pdf.line(M, y+1.5, PW-M, y+1.5);
+      y += rowH;
+    }
 
-      // Create slice canvas for this page
-      const pageCanvas = document.createElement('canvas');
-      pageCanvas.width = canvasW;
-      pageCanvas.height = Math.ceil(sliceH);
-      const ctx = pageCanvas.getContext('2d');
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-      ctx.drawImage(fullCanvas, 0, startY, canvasW, sliceH, 0, 0, canvasW, sliceH);
+    function badge(label, val) {
+      if (!val) return;
+      checkPage(rowH);
+      pdf.setFont('helvetica','normal');
+      pdf.setFontSize(11);
+      pdf.setTextColor(100,100,110);
+      pdf.text(label, M, y);
+      // colored badge
+      const bw = 18, bh = 6, bx = PW-M-bw, by = y-4.5;
+      const isL = val==='LS2';
+      pdf.setFillColor(isL ? 254:239, isL ? 242:246, isL ? 242:255);
+      pdf.setDrawColor(isL ? 252:147, isL ? 165:197, isL ? 165:253);
+      pdf.roundedRect(bx, by, bw, bh, 3, 3, 'FD');
+      pdf.setFont('helvetica','bold');
+      pdf.setFontSize(9);
+      pdf.setTextColor(isL ? 197:29, isL ? 48:78, isL ? 48:216);
+      pdf.text(val, bx+bw/2, y-0.5, {align:'center'});
+      pdf.setTextColor(28,28,30);
+      pdf.setDrawColor(245,245,248);
+      pdf.setLineWidth(0.2);
+      pdf.line(M, y+1.5, PW-M, y+1.5);
+      y += rowH;
+    }
 
-      const imgData = pageCanvas.toDataURL('image/jpeg', 0.95);
-      const imgHeightMm = sliceH * mmPerPx;
-      pdf.addImage(imgData, 'JPEG', margin, margin, usableW, imgHeightMm);
+    // helper: load img → {w,h,dataUrl}
+    function imgInfo(src) {
+      return new Promise((res) => {
+        const im = new Image();
+        im.onload = () => res({ w: im.naturalWidth, h: im.naturalHeight, src });
+        im.onerror = () => res(null);
+        im.src = src;
+      });
+    }
+
+    async function addFullImage(src, labelTxt) {
+      if (!src) return;
+      const info = await imgInfo(src);
+      if (!info) return;
+      const aspect = info.h / info.w;
+      const imgW = CW;
+      const imgH = Math.min(imgW * aspect, PH - M*2 - 20);
+      // always new page for proposition images
+      pdf.addPage();
+      y = M;
+      if (labelTxt) {
+        pdf.setFont('helvetica','bold');
+        pdf.setFontSize(9);
+        pdf.setTextColor(142,142,147);
+        pdf.text(labelTxt.toUpperCase(), M, y); y+=3;
+        pdf.setDrawColor(230,230,235);
+        pdf.setLineWidth(0.3);
+        pdf.line(M,y,PW-M,y); y+=5;
+      }
+      // if image taller than page, scale to fit
+      const finalH = Math.min(imgH, PH - y - M);
+      pdf.addImage(src, 'JPEG', M, y, imgW, finalH, '', 'FAST');
+      y += finalH + 4;
+    }
+
+    // ── PAGE 1: données ──
+    title(v('nom_client') || 'Client');
+    subtitle('RDV du ' + (v('date_rdv')||'—') + '  ·  Préparé le ' + new Date().toLocaleDateString('fr-FR'));
+
+    sectionTitle('Contact');
+    row('À l\'aise avec l\'informatique', tog('tog_info') ? 'Oui' : 'Non');
+    row('Mail envoyé', tog('tog_mail') ? '✓ Oui' : '✗ Non');
+    row('Appel confirmation', tog('tog_sms') ? '✓ Oui' : '✗ Non');
+
+    sectionTitle('Calcul LS2 / LCC — ' + activeFin);
+    row('CRD Immobilier', fmt(n('crd_immo')));
+    row('CRD Consommation', fmt(n('crd_conso')));
+    if (n('dettes')) row('Dettes', fmt(n('dettes')));
+    if (n('tresorerie_calc')) row('Trésorerie', fmt(n('tresorerie_calc')));
+    if (n('frais_calc')) row('Frais', fmt(n('frais_calc')));
+    badge('Régime', regime);
+    row('Part immobilière', ratio.toFixed(1) + '%');
+
+    sectionTitle('Orientation');
+    if (v('orient_banque')) row('Banque orientée', v('orient_banque'));
+    row('PH LCC', togLabel('tog_ph_lcc'));
+    row('PH LS2', togLabel('tog_ph_ls2'));
+    row('Second rang', togLabel('tog_second_rang'));
+    row('PP possible', togLabel('tog_pp_poss'));
+    if (v('orient_raison')) row('Motif', v('orient_raison'));
+
+    sectionTitle('Trésorerie & Assurance');
+    if (n('treso_montant')) row('Montant trésorerie', fmt(n('treso_montant')));
+    if (n('treso_hono')) row('Hono assurance RAC', fmt(n('treso_hono')));
+    if (getSeg('seg_assu')) row('Orientation Ymanci', getSeg('seg_assu'));
+
+    sectionTitle('Équipement');
+    row('Obsèques', tog('tog_obseques') ? 'Éligible' : 'Non éligible');
+    row('ADP', togLabel('tog_adp'));
+    if (getSeg('seg_sante')) row('Santé', getSeg('seg_sante'));
+    if (v('epargne_notes')) row('SEP — épargne', v('epargne_notes'));
+
+    sectionTitle('Documents (' + docsOk + ' / ' + docs.length + ' reçus)');
+    docs.forEach(d => row(d.label, d.checked ? '✅ Reçu' : '⬜ Manquant'));
+
+    // ── IMAGES PROPOSITION — chacune sur sa propre page, pleine largeur ──
+    const phList = propImgs.ph.filter(Boolean);
+    for (let i = 0; i < phList.length; i++) {
+      await addFullImage(phList[i], i===0 ? 'Proposition PH + SEP' : 'Proposition PH + SEP (suite)');
+    }
+    if (propImgs.pp[0]) await addFullImage(propImgs.pp[0], 'Proposition PP + SEP');
+
+    // ── IMAGES GÉNÉRALES — chacune pleine page ──
+    for (const img of imgs) {
+      await addFullImage(img.src, 'Document joint');
     }
 
     const nom = v('nom_client') || 'client';
@@ -1514,7 +1616,7 @@ async function doExport() {
     alert('Erreur export : ' + e.message);
     console.error(e);
   } finally {
-    if (exportBtn) { exportBtn.textContent = 'Télécharger PDF'; exportBtn.disabled = false; }
+    [exportBtn, navBtn].forEach(b => { if(b){ b.textContent='Télécharger PDF'; b.disabled=false; }});
   }
 }
 
