@@ -1439,16 +1439,19 @@ function openPrintPage() {
   var phImgsList = propImgs.ph.filter(Boolean);
   var allImgs = phImgsList.concat(propImgs.pp[0] ? [propImgs.pp[0]] : []);
 
-  // ── helpers ──
-  function r(label, val) {
+  function ro(label, val) {
     if (!val) return '';
-    return '<div class="row"><span class="lbl">' + label + '</span><span class="val">' + val + '</span></div>';
+    return '<div style="display:flex;justify-content:space-between;border-bottom:.3px solid #f0f0f5;padding:2.5px 0;gap:6px">' +
+           '<span style="color:#636366;font-size:9.5px">' + label + '</span>' +
+           '<span style="font-weight:600;font-size:9.5px;text-align:right">' + val + '</span></div>';
   }
+
   function sec(title, rows) {
     var filled = rows.filter(function(x){ return x[1]; });
     if (!filled.length) return '';
-    var s = '<div class="sec"><div class="sec-title">' + title + '</div>';
-    filled.forEach(function(x){ s += r(x[0], x[1]); });
+    var s = '<div style="margin-bottom:9px">';
+    s += '<div style="font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:#8e8e93;border-bottom:1.2px solid #e5e5ea;padding-bottom:2px;margin-bottom:3px">' + title + '</div>';
+    filled.forEach(function(x){ s += ro(x[0], x[1]); });
     s += '</div>';
     return s;
   }
@@ -1456,24 +1459,23 @@ function openPrintPage() {
   var regBg = isLS2 ? '#fef2f2' : '#eff6ff';
   var regColor = isLS2 ? '#b91c1c' : '#1d4ed8';
   var regBorder = isLS2 ? '#fca5a5' : '#93c5fd';
-  var badge = '<span style="background:' + regBg + ';color:' + regColor + ';border:1px solid ' + regBorder + ';padding:1px 8px;border-radius:12px;font-size:9px;font-weight:700">' + regime + '</span> ' + ratio.toFixed(1) + '%';
+  var badge = '<span style="background:' + regBg + ';color:' + regColor + ';border:1px solid ' + regBorder + ';padding:1px 7px;border-radius:10px;font-size:8px;font-weight:700">' + regime + '</span> ' + ratio.toFixed(1) + '% immo';
 
-  // ── data sections in 2-column grid ──
-  var col1 = '';
-  col1 += sec('Contact', [
+  var c1 = '';
+  c1 += sec('Contact', [
     ['Informatique', tog('tog_info') ? 'Oui' : 'Non'],
-    ['Mail envoy\u00e9', tog('tog_mail') ? '\u2713' : '\u2717'],
-    ['Appel confirmation', tog('tog_sms') ? '\u2713' : '\u2717']
+    ['Mail envoy\u00e9', tog('tog_mail') ? '\u2713 Oui' : '\u2717 Non'],
+    ['Appel confirmation', tog('tog_sms') ? '\u2713 Oui' : '\u2717 Non']
   ]);
-  col1 += sec('Calcul — ' + activeFin, [
+  c1 += sec('Calcul \u2014 ' + activeFin, [
     ['CRD Immo', fmt(n('crd_immo'))],
     ['CRD Conso', fmt(n('crd_conso'))],
     ['Dettes', n('dettes') ? fmt(n('dettes')) : ''],
-    ['Trésorerie', n('tresorerie_calc') ? fmt(n('tresorerie_calc')) : ''],
+    ['Tr\u00e9sorerie', n('tresorerie_calc') ? fmt(n('tresorerie_calc')) : ''],
     ['Frais', n('frais_calc') ? fmt(n('frais_calc')) : ''],
-    ['Régime', badge]
+    ['R\u00e9gime', badge]
   ]);
-  col1 += sec('Orientation', [
+  c1 += sec('Orientation', [
     ['Banque', v('orient_banque')],
     ['PH LCC', togLabel('tog_ph_lcc')],
     ['PH LS2', togLabel('tog_ph_ls2')],
@@ -1482,68 +1484,57 @@ function openPrintPage() {
     ['Motif', v('orient_raison')]
   ]);
 
-  var col2 = '';
-  col2 += sec('Trésorerie & Assurance', [
-    ['Montant tréso', n('treso_montant') ? fmt(n('treso_montant')) : ''],
+  var c2 = '';
+  c2 += sec('Tr\u00e9sorerie & Assurance', [
+    ['Montant tr\u00e9so', n('treso_montant') ? fmt(n('treso_montant')) : ''],
     ['Hono assurance RAC', n('treso_hono') ? fmt(n('treso_hono')) : ''],
     ['Ymanci', getSeg('seg_assu')]
   ]);
-  col2 += sec('Équipement', [
-    ['Obsèques', tog('tog_obseques') ? 'Éligible' : 'Non'],
+  c2 += sec('\u00c9quipement', [
+    ['Obs\u00e8ques', tog('tog_obseques') ? '\u00c9ligible' : 'Non'],
     ['ADP', togLabel('tog_adp')],
-    ['Santé', getSeg('seg_sante')],
+    ['Sant\u00e9', getSeg('seg_sante')],
     ['SEP', v('epargne_notes')]
   ]);
-  col2 += sec('Documents (' + docsOk + '/' + docs.length + ')',
-    docs.map(function(d){ return [d.label, d.checked ? '✅' : '⬜']; })
+  c2 += sec('Documents (' + docsOk + '/' + docs.length + ')',
+    docs.map(function(d){ return [d.label, d.checked ? '\u2705 Re\u00e7u' : '\u25a1 Manquant']; })
   );
 
-  // ── images row at bottom ──
+  // images en bas
   var imgsHTML = '';
   if (allImgs.length) {
-    var w = allImgs.length === 1 ? '100%' : allImgs.length === 2 ? '49%' : '32%';
-    imgsHTML = '<div class="img-row">';
     var labels = ['PH + SEP', 'PH + SEP (2)', 'PP + SEP'];
+    var flexW = allImgs.length === 1 ? '100%' : allImgs.length === 2 ? 'calc(50% - 6px)' : 'calc(33.3% - 8px)';
+    imgsHTML = '<div style="display:flex;gap:10px;margin-top:14px;align-items:flex-start;width:100%">';
     allImgs.forEach(function(src, i) {
-      imgsHTML += '<div class="img-block" style="width:' + w + '">' +
-        '<div class="img-label">' + (labels[i] || 'Image') + '</div>' +
-        '<img src="' + src + '">' +
+      imgsHTML += '<div style="width:' + flexW + ';flex-shrink:0">' +
+        '<div style="font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:#8e8e93;margin-bottom:4px">' + (labels[i] || 'Image') + '</div>' +
+        '<img src="' + src + '" style="width:100%;height:auto;display:block;border-radius:5px;border:.5px solid #e5e5ea">' +
         '</div>';
     });
     imgsHTML += '</div>';
   }
 
-  var css = [
-    '*{box-sizing:border-box;margin:0;padding:0}',
-    'body{font-family:-apple-system,Arial,sans-serif;background:#fff;color:#1c1c1e;font-size:10px}',
-    '.page{padding:14mm 12mm}',
-    '.header{margin-bottom:10px}',
-    '.header h1{font-size:16px;font-weight:700;margin-bottom:1px}',
-    '.header .sub{font-size:9px;color:#8e8e93}',
-    '.cols{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}',
-    '.sec{margin-bottom:8px}',
-    '.sec-title{font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#8e8e93;border-bottom:1px solid #e5e5ea;padding-bottom:2px;margin-bottom:3px}',
-    '.row{display:flex;justify-content:space-between;border-bottom:.3px solid #f5f5f7;padding:2px 0;gap:8px}',
-    '.lbl{color:#636366;white-space:nowrap}',
-    '.val{font-weight:600;text-align:right}',
-    '.img-row{display:flex;gap:10px;margin-top:12px;align-items:flex-start}',
-    '.img-block{flex-shrink:0}',
-    '.img-label{font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#8e8e93;margin-bottom:4px}',
-    '.img-block img{width:100%;height:auto;display:block;border-radius:4px;border:.5px solid #e5e5ea}',
-    '.print-btn{position:fixed;top:14px;right:14px;padding:8px 18px;background:#007aff;color:#fff;border:none;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer}',
-    '@media print{.print-btn{display:none}}'
-  ].join('');
+  var html = '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>PrepRDV \u2014 ' + (v('nom_client')||'Client') + '</title><style>' +
+    '*{box-sizing:border-box;margin:0;padding:0}' +
+    'body{font-family:-apple-system,Arial,Helvetica,sans-serif;background:#fff;color:#1c1c1e}' +
+    '@media print{.no-print{display:none!important}}' +
+    '</style></head><body>' +
+    '<button class="no-print" onclick="window.print()" style="position:fixed;top:12px;right:12px;padding:8px 18px;background:#007aff;color:#fff;border:none;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;z-index:99">\uD83D\uDDA8 Imprimer</button>' +
+    '<div style="padding:12mm 14mm;max-width:210mm;margin:0 auto">' +
+      '<div style="margin-bottom:10px">' +
+        '<div style="font-size:18px;font-weight:700;color:#1c1c1e;margin-bottom:2px">' + (v('nom_client')||'Client') + '</div>' +
+        '<div style="font-size:9px;color:#8e8e93">RDV du ' + (v('date_rdv')||'\u2014') + ' &nbsp;\u00b7&nbsp; Pr\u00e9par\u00e9 le ' + new Date().toLocaleDateString('fr-FR') + ' &nbsp;\u00b7&nbsp; ' + activeFin + '</div>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px">' +
+        '<div>' + c1 + '</div>' +
+        '<div>' + c2 + '</div>' +
+      '</div>' +
+      imgsHTML +
+    '</div>' +
+    '</body></html>';
 
-  var html = '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>PrepRDV</title><style>' + css + '</style></head><body>' +
-    '<button class="print-btn" onclick="window.print()">🖨 Imprimer</button>' +
-    '<div class="page">' +
-    '<div class="header"><h1>' + (v('nom_client')||'Client') + '</h1>' +
-    '<div class="sub">RDV du ' + (v('date_rdv')||'—') + ' &nbsp;·&nbsp; ' + new Date().toLocaleDateString('fr-FR') + ' &nbsp;·&nbsp; ' + activeFin + '</div></div>' +
-    '<div class="cols">' + col1 + '</div><div class="cols">' + col2 + '</div>' +
-    imgsHTML +
-    '</div></body></html>';
-
-  var blob = new Blob([html], {type: 'text/html'});
+  var blob = new Blob([html], {type: 'text/html;charset=utf-8'});
   var url = URL.createObjectURL(blob);
   window.open(url, '_blank');
 }
