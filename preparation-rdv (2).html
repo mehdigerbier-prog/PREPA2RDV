@@ -726,7 +726,7 @@ input[type=date].inline-input { max-width: 160px; }
   <div class="nav-actions">
     <button class="nav-btn nav-btn-red" onclick="resetAll()">Effacer</button>
     <button class="nav-btn nav-btn-ghost" onclick="openModal()">Aperçu</button>
-    <button class="nav-btn nav-btn-blue" onclick="openPrintPage()">🖨 Imprimer / PDF</button>
+    <button class="nav-btn nav-btn-blue" onclick="openPrintPage()">↓ Fiche récap</button>
   </div>
 </nav>
 
@@ -1536,7 +1536,13 @@ function openPrintPage() {
 
   var blob = new Blob([html], {type: 'text/html;charset=utf-8'});
   var url = URL.createObjectURL(blob);
-  window.open(url, '_blank');
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'PrepRDV_' + (v('nom_client')||'client').replace(/\s+/g,'_') + '_' + (v('date_rdv')||'').replace(/-/g,'') + '.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
 
 // close modal on backdrop click
