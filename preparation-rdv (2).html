@@ -714,26 +714,20 @@ input[type=date].inline-input { max-width: 160px; }
   .fin-segment { gap: 4px; }
 }
 
+#print-zone { display: none; }
+
 @media print {
-  body > *:not(#pdf-modal) { display: none !important; }
-  #pdf-modal {
+  body > *:not(#print-zone) { display: none !important; }
+  #print-zone {
     display: block !important;
     position: static !important;
-    background: none !important;
-    padding: 0 !important;
-  }
-  .pdf-sheet {
-    max-height: none !important;
-    height: auto !important;
-    overflow: visible !important;
-    box-shadow: none !important;
-    border-radius: 0 !important;
     width: 100% !important;
-    max-width: 100% !important;
+    padding: 10mm !important;
+    font-family: Arial, sans-serif !important;
+    font-size: 11px !important;
+    color: #1c1c1e !important;
+    background: #fff !important;
   }
-  .pdf-modal-actions { display: none !important; }
-  .pdf-handle { display: none !important; }
-  .nav { display: none !important; }
 }
 </style>
 </head>
@@ -748,7 +742,7 @@ input[type=date].inline-input { max-width: 160px; }
   <div class="nav-actions">
     <button class="nav-btn nav-btn-red" onclick="resetAll()">Effacer</button>
     <button class="nav-btn nav-btn-ghost" onclick="openModal()">Aperçu</button>
-    <button class="nav-btn nav-btn-blue" onclick="openModal()">🖨 Imprimer / PDF</button>
+    <button class="nav-btn nav-btn-blue" onclick="doPrint()">🖨 Imprimer / PDF</button>
   </div>
 </nav>
 
@@ -1097,8 +1091,8 @@ input[type=date].inline-input { max-width: 160px; }
     <div class="pdf-sheet-body" id="pdf-body"></div>
     <div class="pdf-modal-actions">
       <button style="padding:9px 20px;border-radius:10px;border:none;background:#f2f2f7;color:#1c1c1e;font-family:inherit;font-size:14px;cursor:pointer" onclick="closeModal()">Fermer</button>
-      <button style="padding:9px 20px;border-radius:10px;border:none;background:#007aff;color:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer" onclick="window.print()">🖨 Imprimer / PDF</button>
-      <button class="nav-btn nav-btn-blue" style="padding:9px 20px;border-radius:10px;font-size:14px" onclick="openPrintPage()">🖨 Imprimer / PDF</button>
+      <button style="padding:9px 20px;border-radius:10px;border:none;background:#007aff;color:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer" onclick="doPrint()">🖨 Imprimer / PDF</button>
+      <button class="nav-btn nav-btn-blue" style="padding:9px 20px;border-radius:10px;font-size:14px" onclick="doPrint()">🖨 Imprimer / PDF</button>
     </div>
   </div>
 </div>
@@ -1375,264 +1369,182 @@ function prow(label, val) {
   return '<div class="pdf-row"><span>' + label + '</span><span>' + val + '</span></div>';
 }
 
-function buildBody() {
-  const { ratio, regime } = getCalc(activeFin);
-  const isLS2 = regime === 'LS2';
-  const docsOk = docs.filter(d => d.checked).length;
+async function doPrint() {
+  var btn = document.querySelector('.nav-btn-blue');
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
 
-  let html = '<div class="pdf-doc-title">' + (v('nom_client')||'Client') + '</div>' +
-    '<div class="pdf-doc-date">RDV du ' + (v('date_rdv')||'—') + ' · Préparé le ' + new Date().toLocaleDateString('fr-FR') + '</div>';
+  try {
+    var jsPDF = window.jspdf.jsPDF;
+    var pdf = new jsPDF({ unit: 'mm', format: 'a4' });
 
-  // Contact
-  html += '<div class="pdf-sec"><div class="pdf-sec-title">Contact</div>' +
-    prow('Informatique', tog('tog_info') ? 'Oui' : 'Non') +
-    prow('Mail envoyé', tog('tog_mail') ? '✓ Oui' : '✗ Non') +
-    prow('Appel confirmation', tog('tog_sms') ? '✓ Oui' : '✗ Non') +
-    '</div>';
+    var cal = getCalc(activeFin);
+    var pzRatio = cal.ratio, pzRegime = cal.regime;
+    var pzLS2 = pzRegime === 'LS2';
+    var pzDocs = docs.filter(function(d){ return d.checked; }).length;
 
-  // Calcul
-  html += '<div class="pdf-sec"><div class="pdf-sec-title">Calcul LS2 / LCC — ' + activeFin + '</div>' +
-    prow('CRD Immobilier', fmt(n('crd_immo'))) +
-    prow('CRD Consommation', fmt(n('crd_conso'))) +
-    prow('Dettes', fmt(n('dettes'))) +
-    prow('Trésorerie', fmt(n('tresorerie_calc'))) +
-    prow('Frais', fmt(n('frais_calc'))) +
-    '<div class="pdf-row"><span>Régime</span><span>' +
-      '<span class="pdf-badge ' + (isLS2?'ls2':'lcc') + '">' + regime + '</span>&nbsp;&nbsp;' + ratio.toFixed(1) + '% part immo' +
-    '</span></div>' +
-    '</div>';
+    // ── Layout constants ──
+    var PW = 210, PH = 297;
+    var ML = 12, MR = 12, MT = 14, MB = 14;
+    var CW = (PW - ML - MR - 8) / 2; // two columns
+    var x1 = ML, x2 = ML + CW + 8;
+    var y1 = MT, y2 = MT;
+    var LH = 5.5, SH = 4, TH = 8;
 
-  // Orientation
-  html += '<div class="pdf-sec"><div class="pdf-sec-title">Orientation</div>' +
-    prow('Banque', v('orient_banque')) +
-    prow('PH LCC', togLabel('tog_ph_lcc')) +
-    prow('PH LS2', togLabel('tog_ph_ls2')) +
-    prow('Second rang', togLabel('tog_second_rang')) +
-    prow('PP possible', togLabel('tog_pp_poss')) +
-    prow('Motif', v('orient_raison')) +
-    '</div>';
+    function safeStr(s) {
+      return (s || '').replace(/[^\x00-\x7E]/g, function(c) {
+        var map = {'\u00e9':'e','\u00e8':'e','\u00ea':'e','\u00eb':'e','\u00e0':'a','\u00e2':'a','\u00e4':'a','\u00f4':'o','\u00f6':'o','\u00f9':'u','\u00fb':'u','\u00fc':'u','\u00ee':'i','\u00ef':'i','\u00e7':'c','\u00c9':'E','\u00c8':'E','\u00c0':'A','\u00d4':'O','\u00ce':'I','\u00c7':'C','\u2014':'-','\u2013':'-','\u2019':"'",'\u00ab':'"','\u00bb':'"','\u2026':'...','\u00b7':'.','\u2713':'v','\u2717':'x','\u2705':'[OK]','\u25a1':'[ ]','\u00c9':'E','\u00e9':'e','\u00e8':'e','\u00ea':'e'};
+        return map[c] || '?';
+      });
+    }
 
-  // Tréso & Assurance
-  html += '<div class="pdf-sec"><div class="pdf-sec-title">Trésorerie & Assurance</div>' +
-    prow('Trésorerie', n('treso_montant') ? fmt(n('treso_montant')) : '') +
-    prow('Hono assurance RAC', n('treso_hono') ? fmt(n('treso_hono')) : '') +
-    prow('Orientation Ymanci', getSeg('seg_assu')) +
-    '</div>';
+    // ── Column writer ──
+    function colRow(x, y, label, val) {
+      if (!val) return y;
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.setTextColor(100, 100, 110);
+      pdf.text(safeStr(label), x, y);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(28, 28, 30);
+      var valStr = safeStr(val);
+      var maxW = CW - 2;
+      pdf.text(valStr, x + CW, y, { align: 'right', maxWidth: maxW });
+      pdf.setDrawColor(240, 240, 245);
+      pdf.setLineWidth(0.15);
+      pdf.line(x, y + 1, x + CW, y + 1);
+      return y + LH;
+    }
 
-  // Équipement
-  html += '<div class="pdf-sec"><div class="pdf-sec-title">Équipement</div>' +
-    prow('Obsèques', tog('tog_obseques') ? 'Éligible' : 'Non éligible') +
-    prow('ADP', togLabel('tog_adp')) +
-    prow('Santé', getSeg('seg_sante')) +
-    prow('Épargne', v('epargne_notes')) +
-    '</div>';
+    function colSection(x, y, title) {
+      y += 2;
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(160, 160, 165);
+      pdf.text(safeStr(title).toUpperCase(), x, y);
+      pdf.setDrawColor(210, 210, 215);
+      pdf.setLineWidth(0.3);
+      pdf.line(x, y + 1.5, x + CW, y + 1.5);
+      return y + SH;
+    }
 
-  // Propositions — images pleine largeur
-  const phImgs = propImgs.ph.filter(Boolean);
-  if (phImgs.length) {
-    html += '<div class="pdf-sec"><div class="pdf-sec-title">Proposition PH + SEP</div>' +
-      phImgs.map(src => '<img src="' + src + '" style="width:100%;border-radius:8px;border:1px solid #eee;display:block;margin-bottom:10px;">').join('') +
-      '</div>';
+    // ── Header ──
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(18);
+    pdf.setTextColor(28, 28, 30);
+    pdf.text(safeStr(v('nom_client') || 'Client'), ML, MT);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8);
+    pdf.setTextColor(140, 140, 147);
+    pdf.text('RDV ' + safeStr(v('date_rdv') || '-') + '  |  ' + activeFin + '  |  ' + new Date().toLocaleDateString('fr-FR'), ML, MT + 6);
+    y1 = MT + 13;
+    y2 = MT + 13;
+
+    // ── Colonne gauche ──
+    y1 = colSection(x1, y1, 'Contact');
+    y1 = colRow(x1, y1, 'Informatique', tog('tog_info') ? 'Oui' : 'Non');
+    y1 = colRow(x1, y1, 'Mail envoye', tog('tog_mail') ? 'v Oui' : 'x Non');
+    y1 = colRow(x1, y1, 'Appel confirmation', tog('tog_sms') ? 'v Oui' : 'x Non');
+
+    y1 = colSection(x1, y1, 'Calcul - ' + activeFin);
+    y1 = colRow(x1, y1, 'CRD Immobilier', safeStr(fmt(n('crd_immo'))));
+    y1 = colRow(x1, y1, 'CRD Consommation', safeStr(fmt(n('crd_conso'))));
+    if (n('dettes')) y1 = colRow(x1, y1, 'Dettes', safeStr(fmt(n('dettes'))));
+    if (n('tresorerie_calc')) y1 = colRow(x1, y1, 'Tresorerie', safeStr(fmt(n('tresorerie_calc'))));
+    if (n('frais_calc')) y1 = colRow(x1, y1, 'Frais', safeStr(fmt(n('frais_calc'))));
+    y1 = colRow(x1, y1, 'Regime', pzRegime + ' - ' + pzRatio.toFixed(1) + '%');
+
+    y1 = colSection(x1, y1, 'Orientation');
+    if (v('orient_banque')) y1 = colRow(x1, y1, 'Banque', safeStr(v('orient_banque')));
+    y1 = colRow(x1, y1, 'PH LCC', togLabel('tog_ph_lcc'));
+    y1 = colRow(x1, y1, 'PH LS2', togLabel('tog_ph_ls2'));
+    y1 = colRow(x1, y1, 'Second rang', togLabel('tog_second_rang'));
+    y1 = colRow(x1, y1, 'PP possible', togLabel('tog_pp_poss'));
+    if (v('orient_raison')) y1 = colRow(x1, y1, 'Motif', safeStr(v('orient_raison')));
+
+    // ── Colonne droite ──
+    y2 = colSection(x2, y2, 'Tresorerie & Assurance');
+    if (n('treso_montant')) y2 = colRow(x2, y2, 'Montant treo', safeStr(fmt(n('treso_montant'))));
+    if (n('treso_hono')) y2 = colRow(x2, y2, 'Hono assurance RAC', safeStr(fmt(n('treso_hono'))));
+    if (getSeg('seg_assu')) y2 = colRow(x2, y2, 'Ymanci', safeStr(getSeg('seg_assu')));
+
+    y2 = colSection(x2, y2, 'Equipement');
+    y2 = colRow(x2, y2, 'Obseques', tog('tog_obseques') ? 'Eligible' : 'Non');
+    y2 = colRow(x2, y2, 'ADP', togLabel('tog_adp'));
+    if (getSeg('seg_sante')) y2 = colRow(x2, y2, 'Sante', safeStr(getSeg('seg_sante')));
+    if (v('epargne_notes')) y2 = colRow(x2, y2, 'SEP', safeStr(v('epargne_notes')));
+
+    y2 = colSection(x2, y2, 'Documents (' + pzDocs + '/' + docs.length + ')');
+    docs.forEach(function(d) {
+      y2 = colRow(x2, y2, safeStr(d.label), d.checked ? '[OK] Recu' : '[ ] Manquant');
+    });
+
+    // ── Images — nouvelle page pour chaque ──
+    var allImgs = propImgs.ph.filter(Boolean).concat(propImgs.pp[0] ? [propImgs.pp[0]] : []);
+    var imgLabels = ['PH + SEP', 'PH + SEP (2)', 'PP + SEP'];
+
+    for (var i = 0; i < allImgs.length; i++) {
+      var src = allImgs[i];
+      var label = imgLabels[i] || 'Image';
+      var imgEl = new Image();
+      await new Promise(function(resolve) {
+        imgEl.onload = resolve;
+        imgEl.onerror = resolve;
+        imgEl.src = src;
+      });
+      if (!imgEl.naturalWidth) continue;
+
+      pdf.addPage();
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8);
+      pdf.setTextColor(140, 140, 147);
+      pdf.text(label.toUpperCase(), ML, MT);
+      pdf.setDrawColor(210, 210, 215);
+      pdf.setLineWidth(0.3);
+      pdf.line(ML, MT + 2, PW - MR, MT + 2);
+
+      var iw = PW - ML - MR;
+      var ih = Math.min((imgEl.naturalHeight / imgEl.naturalWidth) * iw, PH - MT - MB - 8);
+      var fmt_type = src.indexOf('image/png') > -1 ? 'PNG' : 'JPEG';
+      pdf.addImage(src, fmt_type, ML, MT + 6, iw, ih);
+    }
+
+    // ── Save ──
+    var nom = safeStr(v('nom_client') || 'client').replace(/\s+/g, '_');
+    var date = (v('date_rdv') || '').replace(/-/g, '');
+    pdf.save('PrepRDV_' + nom + '_' + date + '.pdf');
+
+  } catch(e) {
+    alert('Erreur : ' + e.message);
+    console.error(e);
+  } finally {
+    if (btn) { btn.textContent = '\uD83D\uDDA8 Imprimer / PDF'; btn.disabled = false; }
   }
-  if (propImgs.pp[0]) html += '<div class="pdf-sec"><div class="pdf-sec-title">Proposition PP + SEP</div><img src="' + propImgs.pp[0] + '" style="width:100%;border-radius:8px;border:1px solid #eee;display:block;"></div>';
-
-  // Docs
-  html += '<div class="pdf-sec"><div class="pdf-sec-title">Documents (' + docsOk + ' / ' + docs.length + ' reçus)</div>' +
-    docs.map(d => prow(d.label, d.checked ? '✅ Reçu' : '⬜ Manquant')).join('') +
-    '</div>';
-
-  // Images GRANDES — 2 par ligne
-  if (imgs.length) {
-    html += '<div class="pdf-sec"><div class="pdf-sec-title">Images (' + imgs.length + ')</div>' +
-      '<div class="pdf-imgs-grid">' + imgs.map(i => '<img src="' + i.src + '">').join('') + '</div></div>';
-  }
-
-  document.getElementById('pdf-body').innerHTML = html;
 }
 
-function openModal() { buildBody(); document.getElementById('pdf-modal').classList.add('open'); }
+function openModal() {
+  var { ratio, regime } = getCalc(activeFin);
+  var isLS2 = regime === 'LS2';
+  var docsOk = docs.filter(d => d.checked).length;
+  var html = '<div class="pdf-doc-title">' + (v('nom_client')||'Client') + '</div>' +
+    '<div class="pdf-doc-date">RDV du ' + (v('date_rdv')||'—') + ' · Préparé le ' + new Date().toLocaleDateString('fr-FR') + '</div>';
+  function prow(label, val) { if (!val) return ''; return '<div class="pdf-row"><span>' + label + '</span><span>' + val + '</span></div>'; }
+  html += '<div class="pdf-sec"><div class="pdf-sec-title">Contact</div>' + prow('Informatique', tog('tog_info')?'Oui':'Non') + prow('Mail envoyé', tog('tog_mail')?'✓ Oui':'✗ Non') + prow('Appel confirmation', tog('tog_sms')?'✓ Oui':'✗ Non') + '</div>';
+  html += '<div class="pdf-sec"><div class="pdf-sec-title">Calcul LS2/LCC — ' + activeFin + '</div>' + prow('CRD Immobilier', fmt(n('crd_immo'))) + prow('CRD Consommation', fmt(n('crd_conso'))) + prow('Dettes', fmt(n('dettes'))) + prow('Trésorerie', fmt(n('tresorerie_calc'))) + prow('Frais', fmt(n('frais_calc'))) + '<div class="pdf-row"><span>Régime</span><span><span class="pdf-badge ' + (isLS2?'ls2':'lcc') + '">' + regime + '</span> ' + ratio.toFixed(1) + '%</span></div></div>';
+  html += '<div class="pdf-sec"><div class="pdf-sec-title">Orientation</div>' + prow('Banque', v('orient_banque')) + prow('PH LCC', togLabel('tog_ph_lcc')) + prow('PH LS2', togLabel('tog_ph_ls2')) + prow('Second rang', togLabel('tog_second_rang')) + prow('PP possible', togLabel('tog_pp_poss')) + prow('Motif', v('orient_raison')) + '</div>';
+  html += '<div class="pdf-sec"><div class="pdf-sec-title">Trésorerie & Assurance</div>' + prow('Montant tréso', n('treso_montant')?fmt(n('treso_montant')):'') + prow('Hono assurance RAC', n('treso_hono')?fmt(n('treso_hono')):'') + prow('Ymanci', getSeg('seg_assu')) + '</div>';
+  html += '<div class="pdf-sec"><div class="pdf-sec-title">Équipement</div>' + prow('Obsèques', tog('tog_obseques')?'Éligible':'Non') + prow('ADP', togLabel('tog_adp')) + prow('Santé', getSeg('seg_sante')) + prow('SEP', v('epargne_notes')) + '</div>';
+  html += '<div class="pdf-sec"><div class="pdf-sec-title">Documents (' + docsOk + '/' + docs.length + ')</div>' + docs.map(d => prow(d.label, d.checked?'✅ Reçu':'⬜ Manquant')).join('') + '</div>';
+  var phImgs = propImgs.ph.filter(Boolean);
+  if (phImgs.length) html += '<div class="pdf-sec"><div class="pdf-sec-title">PH + SEP</div>' + phImgs.map(src => '<img src="' + src + '" style="width:100%;border-radius:8px;margin-bottom:8px">').join('') + '</div>';
+  if (propImgs.pp[0]) html += '<div class="pdf-sec"><div class="pdf-sec-title">PP + SEP</div><img src="' + propImgs.pp[0] + '" style="width:100%;border-radius:8px"></div>';
+  document.getElementById('pdf-body').innerHTML = html;
+  document.getElementById('pdf-modal').classList.add('open');
+}
+
 function closeModal() { document.getElementById('pdf-modal').classList.remove('open'); }
 
-
-function openPrintPage() {
-  var cal = getCalc(activeFin);
-  var ratio = cal.ratio, regime = cal.regime;
-  var isLS2 = regime === 'LS2';
-  var docsOk = docs.filter(function(d){ return d.checked; }).length;
-
-  // Build the page DOM directly — no string concatenation with base64
-  var doc = document.implementation.createHTMLDocument('PrepRDV');
-
-  // Style
-  var style = doc.createElement('style');
-  style.textContent = [
-    '*{box-sizing:border-box;margin:0;padding:0}',
-    'body{font-family:-apple-system,Arial,sans-serif;font-size:10px;color:#1c1c1e;background:#fff;padding:12mm 14mm}',
-    'h1{font-size:17px;font-weight:700;margin-bottom:2px}',
-    '.sub{font-size:9px;color:#8e8e93;margin-bottom:12px}',
-    '.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 22px;margin-bottom:10px}',
-    '.sec{margin-bottom:9px}',
-    '.sec-title{font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:#8e8e93;border-bottom:1.2px solid #e5e5ea;padding-bottom:2px;margin-bottom:3px}',
-    '.row{display:flex;justify-content:space-between;border-bottom:.3px solid #f5f5f7;padding:2.5px 0;gap:8px}',
-    '.lbl{color:#636366}',
-    '.val{font-weight:600;text-align:right}',
-    '.badge{padding:1px 7px;border-radius:10px;font-size:8px;font-weight:700}',
-    '.imgs{display:flex;gap:10px;margin-top:10px}',
-    '.img-wrap{flex:1;min-width:0}',
-    '.img-wrap p{font-size:7px;font-weight:700;text-transform:uppercase;color:#8e8e93;margin-bottom:3px;letter-spacing:.8px}',
-    '.img-wrap img{width:100%;height:auto;display:block;border-radius:4px;border:.5px solid #e5e5ea}',
-    '.btns{position:fixed;top:10px;right:10px;display:flex;gap:8px}',
-    'button{padding:7px 16px;border:none;border-radius:18px;font-size:12px;font-weight:600;cursor:pointer}',
-    '.btn-print{background:#007aff;color:#fff}',
-    '.btn-back{background:#636366;color:#fff}',
-    '@media print{.btns{display:none}}'
-  ].join('');
-  doc.head.appendChild(style);
-
-  // Buttons
-  var btns = doc.createElement('div');
-  btns.className = 'btns';
-  var btnBack = doc.createElement('button');
-  btnBack.className = 'btn-back';
-  btnBack.textContent = '\u2190 Retour';
-  btnBack.onclick = function(){ window.location.reload(); };
-  var btnPrint = doc.createElement('button');
-  btnPrint.className = 'btn-print';
-  btnPrint.textContent = '\uD83D\uDDA8 Imprimer / PDF';
-  btnPrint.onclick = function(){ window.print(); };
-  btns.appendChild(btnBack);
-  btns.appendChild(btnPrint);
-  doc.body.appendChild(btns);
-
-  // Header
-  var h1 = doc.createElement('h1');
-  h1.textContent = v('nom_client') || 'Client';
-  doc.body.appendChild(h1);
-  var sub = doc.createElement('div');
-  sub.className = 'sub';
-  sub.textContent = 'RDV du ' + (v('date_rdv')||'\u2014') + '  \u00b7  ' + activeFin + '  \u00b7  ' + new Date().toLocaleDateString('fr-FR');
-  doc.body.appendChild(sub);
-
-  // Helper: create a row
-  function mkRow(label, val) {
-    if (!val) return null;
-    var d = doc.createElement('div');
-    d.className = 'row';
-    var l = doc.createElement('span'); l.className = 'lbl'; l.textContent = label;
-    var r = doc.createElement('span'); r.className = 'val'; r.innerHTML = val;
-    d.appendChild(l); d.appendChild(r);
-    return d;
-  }
-
-  // Helper: create a section
-  function mkSec(title, rows) {
-    var filled = rows.filter(function(r){ return r[1]; });
-    if (!filled.length) return null;
-    var wrap = doc.createElement('div'); wrap.className = 'sec';
-    var t = doc.createElement('div'); t.className = 'sec-title'; t.textContent = title;
-    wrap.appendChild(t);
-    filled.forEach(function(r){
-      var row = mkRow(r[0], r[1]);
-      if (row) wrap.appendChild(row);
-    });
-    return wrap;
-  }
-
-  var regBg = isLS2 ? '#fef2f2' : '#eff6ff';
-  var regColor = isLS2 ? '#b91c1c' : '#1d4ed8';
-  var regBorder = isLS2 ? '#fca5a5' : '#93c5fd';
-  var badgeHTML = '<span class="badge" style="background:' + regBg + ';color:' + regColor + ';border:1px solid ' + regBorder + '">' + regime + '</span> ' + ratio.toFixed(1) + '% immo';
-
-  // Grid
-  var grid = doc.createElement('div'); grid.className = 'grid';
-  var col1 = doc.createElement('div');
-  var col2 = doc.createElement('div');
-
-  [
-    mkSec('Contact', [
-      ['Informatique', tog('tog_info') ? 'Oui' : 'Non'],
-      ['Mail envoy\u00e9', tog('tog_mail') ? '\u2713 Oui' : '\u2717 Non'],
-      ['Appel confirmation', tog('tog_sms') ? '\u2713 Oui' : '\u2717 Non']
-    ]),
-    mkSec('Calcul \u2014 ' + activeFin, [
-      ['CRD Immo', fmt(n('crd_immo'))],
-      ['CRD Conso', fmt(n('crd_conso'))],
-      ['Dettes', n('dettes') ? fmt(n('dettes')) : ''],
-      ['Tr\u00e9sorerie', n('tresorerie_calc') ? fmt(n('tresorerie_calc')) : ''],
-      ['Frais', n('frais_calc') ? fmt(n('frais_calc')) : ''],
-      ['R\u00e9gime', badgeHTML]
-    ]),
-    mkSec('Orientation', [
-      ['Banque', v('orient_banque')],
-      ['PH LCC', togLabel('tog_ph_lcc')],
-      ['PH LS2', togLabel('tog_ph_ls2')],
-      ['Second rang', togLabel('tog_second_rang')],
-      ['PP possible', togLabel('tog_pp_poss')],
-      ['Motif', v('orient_raison')]
-    ])
-  ].forEach(function(s){ if(s) col1.appendChild(s); });
-
-  [
-    mkSec('Tr\u00e9sorerie & Assurance', [
-      ['Montant tr\u00e9so', n('treso_montant') ? fmt(n('treso_montant')) : ''],
-      ['Hono assurance RAC', n('treso_hono') ? fmt(n('treso_hono')) : ''],
-      ['Ymanci', getSeg('seg_assu')]
-    ]),
-    mkSec('\u00c9quipement', [
-      ['Obs\u00e8ques', tog('tog_obseques') ? '\u00c9ligible' : 'Non'],
-      ['ADP', togLabel('tog_adp')],
-      ['Sant\u00e9', getSeg('seg_sante')],
-      ['SEP', v('epargne_notes')]
-    ]),
-    mkSec('Documents (' + docsOk + '/' + docs.length + ')',
-      docs.map(function(d){ return [d.label, d.checked ? '\u2705 Re\u00e7u' : '\u25a1 Manquant']; })
-    )
-  ].forEach(function(s){ if(s) col2.appendChild(s); });
-
-  grid.appendChild(col1); grid.appendChild(col2);
-  doc.body.appendChild(grid);
-
-  // Images
-  var allImgs = propImgs.ph.filter(Boolean).concat(propImgs.pp[0] ? [propImgs.pp[0]] : []);
-  if (allImgs.length) {
-    var labels = ['PH + SEP', 'PH + SEP (2)', 'PP + SEP'];
-    var imgRow = doc.createElement('div'); imgRow.className = 'imgs';
-    allImgs.forEach(function(src, i){
-      var wrap = doc.createElement('div'); wrap.className = 'img-wrap';
-      var p = doc.createElement('p'); p.textContent = labels[i] || 'Image';
-      var img = doc.createElement('img'); img.src = src;
-      wrap.appendChild(p); wrap.appendChild(img);
-      imgRow.appendChild(wrap);
-    });
-    doc.body.appendChild(imgRow);
-  }
-
-  // Write to page
-  document.open();
-  document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PrepRDV</title></head><body></body></html>');
-  document.close();
-  document.head.innerHTML = doc.head.innerHTML;
-  document.body.innerHTML = '';
-  Array.from(doc.body.childNodes).forEach(function(n){ document.body.appendChild(document.adoptNode(n)); });
-
-  // Re-attach button events
-  document.querySelector('.btn-back').addEventListener('click', function(){ window.location.reload(); });
-  document.querySelector('.btn-print').addEventListener('click', function(){ window.print(); });
-}
-
-// Force full height for printing
-window.addEventListener('beforeprint', function() {
-  var sheet = document.getElementById('pdf-content');
-  if (sheet) { sheet.style.maxHeight = 'none'; sheet.style.overflow = 'visible'; }
-  var modal = document.getElementById('pdf-modal');
-  if (modal) { modal.style.overflow = 'visible'; modal.style.position = 'static'; }
-});
-window.addEventListener('afterprint', function() {
-  var sheet = document.getElementById('pdf-content');
-  if (sheet) { sheet.style.maxHeight = ''; sheet.style.overflow = ''; }
-  var modal = document.getElementById('pdf-modal');
-  if (modal) { modal.style.overflow = ''; modal.style.position = ''; }
-});
+// close modal on backdrop
+document.getElementById('pdf-modal').addEventListener('click', function(e) {
   if (e.target === this) closeModal();
 });
 
@@ -1682,5 +1594,6 @@ document.getElementById('treso_hono').addEventListener('input', function() {
   }
 });
 </script>
+<div id="print-zone"></div>
 </body>
 </html>
