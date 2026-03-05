@@ -1436,113 +1436,165 @@ function openPrintPage() {
   var ratio = cal.ratio, regime = cal.regime;
   var isLS2 = regime === 'LS2';
   var docsOk = docs.filter(function(d){ return d.checked; }).length;
-  var phImgsList = propImgs.ph.filter(Boolean);
-  var allImgs = phImgsList.concat(propImgs.pp[0] ? [propImgs.pp[0]] : []);
 
-  function ro(label, val) {
-    if (!val) return '';
-    return '<div style="display:flex;justify-content:space-between;border-bottom:.3px solid #f0f0f5;padding:2.5px 0;gap:6px">' +
-           '<span style="color:#636366;font-size:9.5px">' + label + '</span>' +
-           '<span style="font-weight:600;font-size:9.5px;text-align:right">' + val + '</span></div>';
+  // Build the page DOM directly — no string concatenation with base64
+  var doc = document.implementation.createHTMLDocument('PrepRDV');
+
+  // Style
+  var style = doc.createElement('style');
+  style.textContent = [
+    '*{box-sizing:border-box;margin:0;padding:0}',
+    'body{font-family:-apple-system,Arial,sans-serif;font-size:10px;color:#1c1c1e;background:#fff;padding:12mm 14mm}',
+    'h1{font-size:17px;font-weight:700;margin-bottom:2px}',
+    '.sub{font-size:9px;color:#8e8e93;margin-bottom:12px}',
+    '.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 22px;margin-bottom:10px}',
+    '.sec{margin-bottom:9px}',
+    '.sec-title{font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:#8e8e93;border-bottom:1.2px solid #e5e5ea;padding-bottom:2px;margin-bottom:3px}',
+    '.row{display:flex;justify-content:space-between;border-bottom:.3px solid #f5f5f7;padding:2.5px 0;gap:8px}',
+    '.lbl{color:#636366}',
+    '.val{font-weight:600;text-align:right}',
+    '.badge{padding:1px 7px;border-radius:10px;font-size:8px;font-weight:700}',
+    '.imgs{display:flex;gap:10px;margin-top:10px}',
+    '.img-wrap{flex:1;min-width:0}',
+    '.img-wrap p{font-size:7px;font-weight:700;text-transform:uppercase;color:#8e8e93;margin-bottom:3px;letter-spacing:.8px}',
+    '.img-wrap img{width:100%;height:auto;display:block;border-radius:4px;border:.5px solid #e5e5ea}',
+    '.btns{position:fixed;top:10px;right:10px;display:flex;gap:8px}',
+    'button{padding:7px 16px;border:none;border-radius:18px;font-size:12px;font-weight:600;cursor:pointer}',
+    '.btn-print{background:#007aff;color:#fff}',
+    '.btn-back{background:#636366;color:#fff}',
+    '@media print{.btns{display:none}}'
+  ].join('');
+  doc.head.appendChild(style);
+
+  // Buttons
+  var btns = doc.createElement('div');
+  btns.className = 'btns';
+  var btnBack = doc.createElement('button');
+  btnBack.className = 'btn-back';
+  btnBack.textContent = '\u2190 Retour';
+  btnBack.onclick = function(){ window.location.reload(); };
+  var btnPrint = doc.createElement('button');
+  btnPrint.className = 'btn-print';
+  btnPrint.textContent = '\uD83D\uDDA8 Imprimer / PDF';
+  btnPrint.onclick = function(){ window.print(); };
+  btns.appendChild(btnBack);
+  btns.appendChild(btnPrint);
+  doc.body.appendChild(btns);
+
+  // Header
+  var h1 = doc.createElement('h1');
+  h1.textContent = v('nom_client') || 'Client';
+  doc.body.appendChild(h1);
+  var sub = doc.createElement('div');
+  sub.className = 'sub';
+  sub.textContent = 'RDV du ' + (v('date_rdv')||'\u2014') + '  \u00b7  ' + activeFin + '  \u00b7  ' + new Date().toLocaleDateString('fr-FR');
+  doc.body.appendChild(sub);
+
+  // Helper: create a row
+  function mkRow(label, val) {
+    if (!val) return null;
+    var d = doc.createElement('div');
+    d.className = 'row';
+    var l = doc.createElement('span'); l.className = 'lbl'; l.textContent = label;
+    var r = doc.createElement('span'); r.className = 'val'; r.innerHTML = val;
+    d.appendChild(l); d.appendChild(r);
+    return d;
   }
 
-  function sec(title, rows) {
-    var filled = rows.filter(function(x){ return x[1]; });
-    if (!filled.length) return '';
-    var s = '<div style="margin-bottom:9px">';
-    s += '<div style="font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:#8e8e93;border-bottom:1.2px solid #e5e5ea;padding-bottom:2px;margin-bottom:3px">' + title + '</div>';
-    filled.forEach(function(x){ s += ro(x[0], x[1]); });
-    s += '</div>';
-    return s;
+  // Helper: create a section
+  function mkSec(title, rows) {
+    var filled = rows.filter(function(r){ return r[1]; });
+    if (!filled.length) return null;
+    var wrap = doc.createElement('div'); wrap.className = 'sec';
+    var t = doc.createElement('div'); t.className = 'sec-title'; t.textContent = title;
+    wrap.appendChild(t);
+    filled.forEach(function(r){
+      var row = mkRow(r[0], r[1]);
+      if (row) wrap.appendChild(row);
+    });
+    return wrap;
   }
 
   var regBg = isLS2 ? '#fef2f2' : '#eff6ff';
   var regColor = isLS2 ? '#b91c1c' : '#1d4ed8';
   var regBorder = isLS2 ? '#fca5a5' : '#93c5fd';
-  var badge = '<span style="background:' + regBg + ';color:' + regColor + ';border:1px solid ' + regBorder + ';padding:1px 7px;border-radius:10px;font-size:8px;font-weight:700">' + regime + '</span> ' + ratio.toFixed(1) + '% immo';
+  var badgeHTML = '<span class="badge" style="background:' + regBg + ';color:' + regColor + ';border:1px solid ' + regBorder + '">' + regime + '</span> ' + ratio.toFixed(1) + '% immo';
 
-  var c1 = '';
-  c1 += sec('Contact', [
-    ['Informatique', tog('tog_info') ? 'Oui' : 'Non'],
-    ['Mail envoy\u00e9', tog('tog_mail') ? '\u2713 Oui' : '\u2717 Non'],
-    ['Appel confirmation', tog('tog_sms') ? '\u2713 Oui' : '\u2717 Non']
-  ]);
-  c1 += sec('Calcul \u2014 ' + activeFin, [
-    ['CRD Immo', fmt(n('crd_immo'))],
-    ['CRD Conso', fmt(n('crd_conso'))],
-    ['Dettes', n('dettes') ? fmt(n('dettes')) : ''],
-    ['Tr\u00e9sorerie', n('tresorerie_calc') ? fmt(n('tresorerie_calc')) : ''],
-    ['Frais', n('frais_calc') ? fmt(n('frais_calc')) : ''],
-    ['R\u00e9gime', badge]
-  ]);
-  c1 += sec('Orientation', [
-    ['Banque', v('orient_banque')],
-    ['PH LCC', togLabel('tog_ph_lcc')],
-    ['PH LS2', togLabel('tog_ph_ls2')],
-    ['Second rang', togLabel('tog_second_rang')],
-    ['PP possible', togLabel('tog_pp_poss')],
-    ['Motif', v('orient_raison')]
-  ]);
+  // Grid
+  var grid = doc.createElement('div'); grid.className = 'grid';
+  var col1 = doc.createElement('div');
+  var col2 = doc.createElement('div');
 
-  var c2 = '';
-  c2 += sec('Tr\u00e9sorerie & Assurance', [
-    ['Montant tr\u00e9so', n('treso_montant') ? fmt(n('treso_montant')) : ''],
-    ['Hono assurance RAC', n('treso_hono') ? fmt(n('treso_hono')) : ''],
-    ['Ymanci', getSeg('seg_assu')]
-  ]);
-  c2 += sec('\u00c9quipement', [
-    ['Obs\u00e8ques', tog('tog_obseques') ? '\u00c9ligible' : 'Non'],
-    ['ADP', togLabel('tog_adp')],
-    ['Sant\u00e9', getSeg('seg_sante')],
-    ['SEP', v('epargne_notes')]
-  ]);
-  c2 += sec('Documents (' + docsOk + '/' + docs.length + ')',
-    docs.map(function(d){ return [d.label, d.checked ? '\u2705 Re\u00e7u' : '\u25a1 Manquant']; })
-  );
+  [
+    mkSec('Contact', [
+      ['Informatique', tog('tog_info') ? 'Oui' : 'Non'],
+      ['Mail envoy\u00e9', tog('tog_mail') ? '\u2713 Oui' : '\u2717 Non'],
+      ['Appel confirmation', tog('tog_sms') ? '\u2713 Oui' : '\u2717 Non']
+    ]),
+    mkSec('Calcul \u2014 ' + activeFin, [
+      ['CRD Immo', fmt(n('crd_immo'))],
+      ['CRD Conso', fmt(n('crd_conso'))],
+      ['Dettes', n('dettes') ? fmt(n('dettes')) : ''],
+      ['Tr\u00e9sorerie', n('tresorerie_calc') ? fmt(n('tresorerie_calc')) : ''],
+      ['Frais', n('frais_calc') ? fmt(n('frais_calc')) : ''],
+      ['R\u00e9gime', badgeHTML]
+    ]),
+    mkSec('Orientation', [
+      ['Banque', v('orient_banque')],
+      ['PH LCC', togLabel('tog_ph_lcc')],
+      ['PH LS2', togLabel('tog_ph_ls2')],
+      ['Second rang', togLabel('tog_second_rang')],
+      ['PP possible', togLabel('tog_pp_poss')],
+      ['Motif', v('orient_raison')]
+    ])
+  ].forEach(function(s){ if(s) col1.appendChild(s); });
 
-  // images en bas
-  var imgsHTML = '';
+  [
+    mkSec('Tr\u00e9sorerie & Assurance', [
+      ['Montant tr\u00e9so', n('treso_montant') ? fmt(n('treso_montant')) : ''],
+      ['Hono assurance RAC', n('treso_hono') ? fmt(n('treso_hono')) : ''],
+      ['Ymanci', getSeg('seg_assu')]
+    ]),
+    mkSec('\u00c9quipement', [
+      ['Obs\u00e8ques', tog('tog_obseques') ? '\u00c9ligible' : 'Non'],
+      ['ADP', togLabel('tog_adp')],
+      ['Sant\u00e9', getSeg('seg_sante')],
+      ['SEP', v('epargne_notes')]
+    ]),
+    mkSec('Documents (' + docsOk + '/' + docs.length + ')',
+      docs.map(function(d){ return [d.label, d.checked ? '\u2705 Re\u00e7u' : '\u25a1 Manquant']; })
+    )
+  ].forEach(function(s){ if(s) col2.appendChild(s); });
+
+  grid.appendChild(col1); grid.appendChild(col2);
+  doc.body.appendChild(grid);
+
+  // Images
+  var allImgs = propImgs.ph.filter(Boolean).concat(propImgs.pp[0] ? [propImgs.pp[0]] : []);
   if (allImgs.length) {
     var labels = ['PH + SEP', 'PH + SEP (2)', 'PP + SEP'];
-    var flexW = allImgs.length === 1 ? '100%' : allImgs.length === 2 ? 'calc(50% - 6px)' : 'calc(33.3% - 8px)';
-    imgsHTML = '<div style="display:flex;gap:10px;margin-top:14px;align-items:flex-start;width:100%">';
-    allImgs.forEach(function(src, i) {
-      imgsHTML += '<div style="width:' + flexW + ';flex-shrink:0">' +
-        '<div style="font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:#8e8e93;margin-bottom:4px">' + (labels[i] || 'Image') + '</div>' +
-        '<img src="' + src + '" style="width:100%;height:auto;display:block;border-radius:5px;border:.5px solid #e5e5ea">' +
-        '</div>';
+    var imgRow = doc.createElement('div'); imgRow.className = 'imgs';
+    allImgs.forEach(function(src, i){
+      var wrap = doc.createElement('div'); wrap.className = 'img-wrap';
+      var p = doc.createElement('p'); p.textContent = labels[i] || 'Image';
+      var img = doc.createElement('img'); img.src = src;
+      wrap.appendChild(p); wrap.appendChild(img);
+      imgRow.appendChild(wrap);
     });
-    imgsHTML += '</div>';
+    doc.body.appendChild(imgRow);
   }
 
-  var html = '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>PrepRDV \u2014 ' + (v('nom_client')||'Client') + '</title><style>' +
-    '*{box-sizing:border-box;margin:0;padding:0}' +
-    'body{font-family:-apple-system,Arial,Helvetica,sans-serif;background:#fff;color:#1c1c1e}' +
-    '@media print{.no-print{display:none!important}}' +
-    '</style></head><body>' +
-    '<button class="no-print" onclick="window.print()" style="position:fixed;top:12px;right:12px;padding:8px 18px;background:#007aff;color:#fff;border:none;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;z-index:99">\uD83D\uDDA8 Imprimer</button>' +
-    '<div style="padding:12mm 14mm;max-width:210mm;margin:0 auto">' +
-      '<div style="margin-bottom:10px">' +
-        '<div style="font-size:18px;font-weight:700;color:#1c1c1e;margin-bottom:2px">' + (v('nom_client')||'Client') + '</div>' +
-        '<div style="font-size:9px;color:#8e8e93">RDV du ' + (v('date_rdv')||'\u2014') + ' &nbsp;\u00b7&nbsp; Pr\u00e9par\u00e9 le ' + new Date().toLocaleDateString('fr-FR') + ' &nbsp;\u00b7&nbsp; ' + activeFin + '</div>' +
-      '</div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px">' +
-        '<div>' + c1 + '</div>' +
-        '<div>' + c2 + '</div>' +
-      '</div>' +
-      imgsHTML +
-    '</div>' +
-    '</body></html>';
+  // Write to page
+  document.open();
+  document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PrepRDV</title></head><body></body></html>');
+  document.close();
+  document.head.innerHTML = doc.head.innerHTML;
+  document.body.innerHTML = '';
+  Array.from(doc.body.childNodes).forEach(function(n){ document.body.appendChild(document.adoptNode(n)); });
 
-  var blob = new Blob([html], {type: 'text/html;charset=utf-8'});
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url;
-  a.download = 'PrepRDV_' + (v('nom_client')||'client').replace(/\s+/g,'_') + '_' + (v('date_rdv')||'').replace(/-/g,'') + '.html';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  // Re-attach button events
+  document.querySelector('.btn-back').addEventListener('click', function(){ window.location.reload(); });
+  document.querySelector('.btn-print').addEventListener('click', function(){ window.print(); });
 }
 
 // close modal on backdrop click
