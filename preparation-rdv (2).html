@@ -713,6 +713,28 @@ input[type=date].inline-input { max-width: 160px; }
   .pdf-imgs-grid { grid-template-columns: 1fr; }
   .fin-segment { gap: 4px; }
 }
+
+@media print {
+  body > *:not(#pdf-modal) { display: none !important; }
+  #pdf-modal {
+    display: block !important;
+    position: static !important;
+    background: none !important;
+    padding: 0 !important;
+  }
+  .pdf-sheet {
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .pdf-modal-actions { display: none !important; }
+  .pdf-handle { display: none !important; }
+  .nav { display: none !important; }
+}
 </style>
 </head>
 <body>
@@ -726,7 +748,7 @@ input[type=date].inline-input { max-width: 160px; }
   <div class="nav-actions">
     <button class="nav-btn nav-btn-red" onclick="resetAll()">Effacer</button>
     <button class="nav-btn nav-btn-ghost" onclick="openModal()">Aperçu</button>
-    <button class="nav-btn nav-btn-blue" onclick="openPrintPage()">↓ Fiche récap</button>
+    <button class="nav-btn nav-btn-blue" onclick="openModal()">🖨 Imprimer / PDF</button>
   </div>
 </nav>
 
@@ -1075,6 +1097,7 @@ input[type=date].inline-input { max-width: 160px; }
     <div class="pdf-sheet-body" id="pdf-body"></div>
     <div class="pdf-modal-actions">
       <button style="padding:9px 20px;border-radius:10px;border:none;background:#f2f2f7;color:#1c1c1e;font-family:inherit;font-size:14px;cursor:pointer" onclick="closeModal()">Fermer</button>
+      <button style="padding:9px 20px;border-radius:10px;border:none;background:#007aff;color:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer" onclick="window.print()">🖨 Imprimer / PDF</button>
       <button class="nav-btn nav-btn-blue" style="padding:9px 20px;border-radius:10px;font-size:14px" onclick="openPrintPage()">🖨 Imprimer / PDF</button>
     </div>
   </div>
@@ -1597,8 +1620,19 @@ function openPrintPage() {
   document.querySelector('.btn-print').addEventListener('click', function(){ window.print(); });
 }
 
-// close modal on backdrop click
-document.getElementById('pdf-modal').addEventListener('click', function(e) {
+// Force full height for printing
+window.addEventListener('beforeprint', function() {
+  var sheet = document.getElementById('pdf-content');
+  if (sheet) { sheet.style.maxHeight = 'none'; sheet.style.overflow = 'visible'; }
+  var modal = document.getElementById('pdf-modal');
+  if (modal) { modal.style.overflow = 'visible'; modal.style.position = 'static'; }
+});
+window.addEventListener('afterprint', function() {
+  var sheet = document.getElementById('pdf-content');
+  if (sheet) { sheet.style.maxHeight = ''; sheet.style.overflow = ''; }
+  var modal = document.getElementById('pdf-modal');
+  if (modal) { modal.style.overflow = ''; modal.style.position = ''; }
+});
   if (e.target === this) closeModal();
 });
 
